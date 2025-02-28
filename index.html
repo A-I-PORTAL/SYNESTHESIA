@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Mobile optimization -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>SYNESTHESIA draw with sound</title>
+  <!-- Load a modern sans-serif font -->
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    /* Basic resets and base styling */
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #111;
+      font-family: 'Quicksand', sans-serif;
+      height: 100%;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    /* The canvas element – note that its CSS background does not get exported */
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #111;
+    }
+    /* Splash screen overlay */
+    #splash {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #2c3e50, #bdc3c7);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      text-align: center;
+      padding: 20px;
+      cursor: pointer;
+    }
+    #splash h1 { font-size: 2.5em; margin-bottom: 0.5em; }
+    #splash p { font-size: 1em; }
+    /* Hamburger menu icon */
+    #hamburger {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      font-size: 28px;
+      color: #fff;
+      z-index: 20;
+      cursor: pointer;
+      user-select: none;
+    }
+    /* Settings panel overlay */
+    #settingsPanel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 320px;
+      height: 100%;
+      background: rgba(0,0,0,0.95);
+      color: #fff;
+      padding: 20px;
+      box-sizing: border-box;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      z-index: 30;
+      overflow-y: auto;
+    }
+    #settingsPanel.visible { transform: translateX(0); }
+    #settingsPanel h2 {
+      margin-top: 0;
+      font-size: 1.8em;
+      border-bottom: 1px solid #444;
+      padding-bottom: 10px;
+    }
+    #settingsPanel label {
+      display: block;
+      margin: 15px 0 5px;
+      font-size: 0.9em;
+    }
+    #settingsPanel input[type="color"],
+    #settingsPanel input[type="range"],
+    #settingsPanel input[type="checkbox"] {
+      width: 100%;
+      padding: 8px;
+      font-size: 1em;
+      margin-bottom: 10px;
+      border: none;
+      border-radius: 4px;
+    }
+    #settingsPanel button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      font-size: 1em;
+      border: none;
+      border-radius: 4px;
+      background: #2980b9;
+      color: #fff;
+      cursor: pointer;
+    }
+    /* Toolbar for tool selection */
+    #toolbar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 10px 0;
+      z-index: 20;
+    }
+    #toolbar button {
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 0.8em;
+      margin: 5px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    #toolbar button.active {
+      color: #f39c12;
+      border-bottom: 2px solid #f39c12;
+    }
+    @media (max-width: 600px) {
+      #settingsPanel { width: 280px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Fullscreen drawing canvas -->
+  <canvas id="canvas"></canvas>
+  <!-- Splash screen overlay -->
+  <div id="splash">
+    <h1>SYNESTHESIA draw with sound</h1>
+    <p>Tap anywhere to start drawing with sound</p>
+  </div>
+  <!-- Hamburger menu icon -->
+  <div id="hamburger">&#9776;</div>
+  <!-- Settings panel overlay -->
+  <div id="settingsPanel">
+    <h2>Settings</h2>
+    <!-- Basic color and brush parameters -->
+    <label for="colorPicker">Select Base Color</label>
+    <input type="color" id="colorPicker" value="#ff007f">
+    <label for="widthSlider">Brush Width</label>
+    <input type="range" id="widthSlider" min="1" max="100" value="20">
+    <label for="spacingSlider">Dot Spacing</label>
+    <input type="range" id="spacingSlider" min="1" max="50" value="10">
+    <label for="blurSlider">Blur Amount</label>
+    <input type="range" id="blurSlider" min="0" max="50" value="5">
+    <label for="jitterSlider">Jitter Amount (Crayon)</label>
+    <input type="range" id="jitterSlider" min="0" max="10" value="4">
+    <!-- Rainbow options: when enabled, the brush uses a spectrum instead of a fixed color -->
+    <label for="rainbowToggle">Enable Rainbow Mode</label>
+    <input type="checkbox" id="rainbowToggle">
+    <label for="rainbowSpectrumSlider">Rainbow Spectrum Width (°)</label>
+    <input type="range" id="rainbowSpectrumSlider" min="0" max="360" value="360">
+    <label for="rainbowBaseSlider">Rainbow Base Hue (°)</label>
+    <input type="range" id="rainbowBaseSlider" min="0" max="360" value="0">
+    <!-- Other brush adjustments -->
+    <label for="sparkleSlider">Sparkle Intensity (Sparkler)</label>
+    <input type="range" id="sparkleSlider" min="1" max="50" value="20">
+    <label for="ringSizeSlider">Ring Size (Rings)</label>
+    <input type="range" id="ringSizeSlider" min="5" max="50" value="20">
+    <label for="scatterSlider">Scatter Spread (Scattering)</label>
+    <input type="range" id="scatterSlider" min="5" max="50" value="15">
+    <label for="dynamicDashSlider">Dynamic Dash Length</label>
+    <input type="range" id="dynamicDashSlider" min="1" max="50" value="15">
+    <!-- Save options -->
+    <label for="transparentSave">Transparent Background for Save</label>
+    <input type="checkbox" id="transparentSave">
+    <button id="clearCanvas">Clear Canvas</button>
+    <button id="downloadImage">Download Image (PNG)</button>
+    <button id="saveSettings">Save Settings</button>
+    <button id="closeSettings">Close</button>
+  </div>
+  <!-- Toolbar for tool selection -->
+  <div id="toolbar">
+    <button data-tool="fine" class="active" title="Fine">Fine</button>
+    <button data-tool="splatter" title="Splatter">Splatter</button>
+    <button data-tool="brush" title="Brush">Brush</button>
+    <button data-tool="highlighter" title="Highlighter">Highlighter</button>
+    <button data-tool="crayon" title="Crayon">Crayon</button>
+    <button data-tool="dynamic" title="Dynamic">Dynamic</button>
+    <button data-tool="oil" title="Oil">Oil</button>
+    <button data-tool="chalk" title="Chalk">Chalk</button>
+    <button data-tool="spray" title="Spray">Spray</button>
+    <button data-tool="sparkler" title="Sparkler">Sparkler</button>
+    <button data-tool="electric" title="Electric">Electric</button>
+    <button data-tool="rings" title="Rings">Rings</button>
+    <button data-tool="scattering" title="Scattering">Scattering</button>
+    <button data-tool="eraser" title="Eraser">Eraser</button>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Core elements and initial settings
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      let drawing = false;
+      let startX = 0, startY = 0;
+      let lastX = 0, lastY = 0;
+      let dynamicDistance = 0;
+      // For rainbow mode, track the current rainbow hue (initialize from rainbowBase)
+      let currentRainbowHue = Number(document.getElementById('rainbowBaseSlider').value);
+      let currentTool = 'fine';
+      const settings = {
+        color: document.getElementById('colorPicker').value,
+        width: document.getElementById('widthSlider').value,
+        spacing: document.getElementById('spacingSlider').value,
+        blur: document.getElementById('blurSlider').value,
+        jitter: document.getElementById('jitterSlider').value,
+        rainbowEnabled: document.getElementById('rainbowToggle').checked,
+        rainbowSpectrum: document.getElementById('rainbowSpectrumSlider').value,
+        rainbowBase: document.getElementById('rainbowBaseSlider').value,
+        sparkle: document.getElementById('sparkleSlider').value,
+        ringSize: document.getElementById('ringSizeSlider').value,
+        scatter: document.getElementById('scatterSlider').value,
+        dynamicDash: document.getElementById('dynamicDashSlider').value
+      };
+
+      // Helper function: returns the current drawing color
+      function getCurrentColor() {
+        if (settings.rainbowEnabled) {
+          return `hsl(${currentRainbowHue}, 100%, 50%)`;
+        }
+        return settings.color;
+      }
+      
+      // Resize canvas to full window size
+      function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+
+      // Initialize AudioContext
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioContext();
+
+      // Settings Panel & Hamburger Logic
+      const hamburger = document.getElementById('hamburger');
+      const settingsPanel = document.getElementById('settingsPanel');
+      hamburger.addEventListener('click', () => { settingsPanel.classList.toggle('visible'); });
+      document.getElementById('closeSettings').addEventListener('click', () => { settingsPanel.classList.remove('visible'); });
+      document.getElementById('saveSettings').addEventListener('click', () => {
+        settings.color = document.getElementById('colorPicker').value;
+        settings.width = document.getElementById('widthSlider').value;
+        settings.spacing = document.getElementById('spacingSlider').value;
+        settings.blur = document.getElementById('blurSlider').value;
+        settings.jitter = document.getElementById('jitterSlider').value;
+        settings.rainbowEnabled = document.getElementById('rainbowToggle').checked;
+        settings.rainbowSpectrum = document.getElementById('rainbowSpectrumSlider').value;
+        settings.rainbowBase = document.getElementById('rainbowBaseSlider').value;
+        settings.sparkle = document.getElementById('sparkleSlider').value;
+        settings.ringSize = document.getElementById('ringSizeSlider').value;
+        settings.scatter = document.getElementById('scatterSlider').value;
+        settings.dynamicDash = document.getElementById('dynamicDashSlider').value;
+        if(settings.rainbowEnabled) {
+          currentRainbowHue = Number(settings.rainbowBase);
+        }
+        settingsPanel.classList.remove('visible');
+      });
+      document.getElementById('clearCanvas').addEventListener('click', () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      });
+      document.getElementById('downloadImage').addEventListener('click', downloadImage);
+
+      // Toolbar Tool Selection
+      const toolbarButtons = document.querySelectorAll('#toolbar button');
+      toolbarButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+          currentTool = this.getAttribute('data-tool');
+          toolbarButtons.forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+        });
+      });
+
+      // Dismiss splash screen on first interaction
+      const splash = document.getElementById('splash');
+      function startInteraction(e) {
+        e.preventDefault();
+        if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+        splash.style.transition = 'opacity 0.5s';
+        splash.style.opacity = 0;
+        setTimeout(() => { splash.style.display = 'none'; }, 500);
+      }
+      canvas.addEventListener('mousedown', startInteraction, {once: true});
+      canvas.addEventListener('touchstart', startInteraction, {once: true});
+      splash.addEventListener('mousedown', startInteraction, {once: true});
+      splash.addEventListener('touchstart', startInteraction, {once: true});
+
+      // ----- UTILITY FUNCTIONS -----
+      // Convert hex color to hue (0-360)
+      function getHue(hexColor) {
+        const hex = hexColor.substring(1);
+        const r = parseInt(hex.substring(0,2), 16);
+        const g = parseInt(hex.substring(2,4), 16);
+        const b = parseInt(hex.substring(4,6), 16);
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        let hue = 0;
+        if(max !== min) {
+          const d = max - min;
+          hue = max === r ? ((g - b) / d) % 6 : max === g ? ((b - r) / d) + 2 : ((r - g) / d) + 4;
+          hue = Math.round(hue * 60);
+          if(hue < 0) hue += 360;
+        }
+        return hue;
+      }
+      // Get pointer position
+      function getPos(e) {
+        let x, y;
+        if (e.touches && e.touches.length) {
+          x = e.touches[0].clientX;
+          y = e.touches[0].clientY;
+        } else {
+          x = e.clientX;
+          y = e.clientY;
+        }
+        return { x, y };
+      }
+
+      // ----- BRUSH DRAWING FUNCTIONS -----
+      function drawFine(x1, y1, x2, y2) {
+        ctx.strokeStyle = getCurrentColor();
+        ctx.lineWidth = Number(settings.width);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      function drawSplatter(x1, y1, x2, y2) {
+        ctx.strokeStyle = getCurrentColor();
+        ctx.lineWidth = Number(settings.width) * 1.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        let dist = Math.hypot(x2 - x1, y2 - y1);
+        let numDots = Math.floor(dist / Number(settings.spacing));
+        for (let i = 0; i < numDots; i++) {
+          let t = Math.random();
+          let cx = x1 + t * (x2 - x1) + (Math.random() - 0.5) * Number(settings.spacing);
+          let cy = y1 + t * (y2 - y1) + (Math.random() - 0.5) * Number(settings.spacing);
+          let radius = Math.random() * 3 + 1;
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          ctx.fillStyle = getCurrentColor();
+          ctx.fill();
+        }
+      }
+      function drawBrush(x1, y1, x2, y2) {
+        ctx.strokeStyle = getCurrentColor();
+        ctx.lineCap = 'round';
+        let baseWidth = Number(settings.width) * 1.2;
+        for (let offset = -2; offset <= 2; offset++) {
+          ctx.lineWidth = baseWidth + offset;
+          ctx.beginPath();
+          ctx.moveTo(x1 + offset, y1 + offset);
+          ctx.lineTo(x2 + offset, y2 + offset);
+          ctx.stroke();
+        }
+      }
+      function drawHighlighter(x1, y1, x2, y2) {
+        ctx.strokeStyle = getCurrentColor();
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Number(settings.width) * 2;
+        let prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = 0.5;
+        ctx.shadowColor = getCurrentColor();
+        ctx.shadowBlur = Number(settings.blur);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = prevAlpha;
+      }
+      function drawCrayon(x1, y1, x2, y2) {
+        ctx.strokeStyle = getCurrentColor();
+        ctx.lineCap = 'round';
+        let baseWidth = Number(settings.width);
+        let dx = x2 - x1, dy = y2 - y1;
+        let segments = 5;
+        let prevX = x1, prevY = y1;
+        for (let i = 1; i <= segments; i++) {
+          let t = i / segments;
+          let targetX = x1 + t * dx + (Math.random() - 0.5) * Number(settings.jitter);
+          let targetY = y1 + t * dy + (Math.random() - 0.5) * Number(settings.jitter);
+          ctx.lineWidth = baseWidth + Math.random();
+          ctx.beginPath();
+          ctx.moveTo(prevX, prevY);
+          ctx.lineTo(targetX, targetY);
+          ctx.stroke();
+          prevX = targetX;
+          prevY = targetY;
+        }
+      }
+      function drawDynamic(x1, y1, x2, y2) {
+        ctx.strokeStyle = getCurrentColor();
+        ctx.lineWidth = Number(settings.width);
+        ctx.lineCap = 'round';
+        let segment = Math.hypot(x2 - x1, y2 - y1);
+        dynamicDistance += segment;
+        let dashPhase = (dynamicDistance % Number(settings.dynamicDash)) / Number(settings.dynamicDash);
+        ctx.setLineDash([5, 15 * (1 - dashPhase)]);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      function drawOil(x1, y1, x2, y2) {
+        ctx.strokeStyle = getCurrentColor();
+        let baseWidth = Number(settings.width) * 2;
+        ctx.lineCap = 'round';
+        let segments = 8;
+        let prevX = x1, prevY = y1;
+        for (let i = 1; i <= segments; i++) {
+          let t = i / segments;
+          let midX = x1 + t * (x2 - x1) + (Math.random() - 0.5) * Number(settings.spacing);
+          let midY = y1 + t * (y2 - y1) + (Math.random() - 0.5) * Number(settings.spacing);
+          ctx.lineWidth = baseWidth * (1 - t * 0.8);
+          ctx.beginPath();
+          ctx.moveTo(prevX, prevY);
+          ctx.quadraticCurveTo(midX, midY, x2, y2);
+          ctx.stroke();
+          prevX = midX;
+          prevY = midY;
+        }
+      }
+      function drawChalk(x1, y1, x2, y2) {
+        let dist = Math.hypot(x2 - x1, y2 - y1);
+        let numDots = Math.floor(dist / Number(settings.spacing)) * 2;
+        for (let i = 0; i < numDots; i++) {
+          let t = Math.random();
+          let cx = x1 + t * (x2 - x1) + (Math.random() - 0.5) * Number(settings.spacing);
+          let cy = y1 + t * (y2 - y1) + (Math.random() - 0.5) * Number(settings.spacing);
+          let radius = Math.random() * 2 + 1;
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          ctx.fillStyle = getCurrentColor();
+          ctx.fill();
+        }
+      }
+      function drawSpray(x1, y1, x2, y2) {
+        let dist = Math.hypot(x2 - x1, y2 - y1);
+        let numDots = Math.floor(dist / Number(settings.spacing)) * 4;
+        for (let i = 0; i < numDots; i++) {
+          let cx = x1 + Math.random() * (x2 - x1) + (Math.random() - 0.5) * Number(settings.spacing) * 1.5;
+          let cy = y1 + Math.random() * (y2 - y1) + (Math.random() - 0.5) * Number(settings.spacing) * 1.5;
+          let radius = Math.random() * 1.5 + 0.5;
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          ctx.fillStyle = getCurrentColor();
+          ctx.globalAlpha = 0.3;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+      }
+      // NEW: Rainbow tool – when rainbow mode is enabled, all brushes use the rainbow color.
+      // The rainbow color cycles as you draw. Here we update the currentRainbowHue.
+      function updateRainbow(x1, y1, x2, y2) {
+        let segLength = Math.hypot(x2 - x1, y2 - y1);
+        // Increment hue based on the chosen spectrum width and stroke length.
+        let hueIncrement = (Number(settings.rainbowSpectrum) / 360) * segLength * 0.5;
+        currentRainbowHue = (currentRainbowHue + hueIncrement) % 360;
+      }
+      // NEW: Sparkler tool – add extra sparkles along the stroke.
+      function drawSparkler(x1, y1, x2, y2) {
+        ctx.strokeStyle = getCurrentColor();
+        ctx.lineWidth = Number(settings.width) * 1.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        let dist = Math.hypot(x2 - x1, y2 - y1);
+        let numDots = Math.floor(dist / Number(settings.spacing)) + Number(settings.sparkle);
+        for (let i = 0; i < numDots; i++) {
+          let t = Math.random();
+          let cx = x1 + t * (x2 - x1) + (Math.random() - 0.5) * Number(settings.spacing);
+          let cy = y1 + t * (y2 - y1) + (Math.random() - 0.5) * Number(settings.spacing);
+          let radius = Math.random() * 2 + 1;
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          ctx.fillStyle = getCurrentColor();
+          ctx.fill();
+        }
+      }
+      // NEW: Electric tool – jagged, lightning-like stroke.
+      function drawElectric(x1, y1, x2, y2) {
+        ctx.strokeStyle = getCurrentColor();
+        ctx.lineWidth = Number(settings.width) * 1.2;
+        ctx.lineCap = 'round';
+        let segments = 8;
+        let prevX = x1, prevY = y1;
+        for (let i = 1; i <= segments; i++) {
+          let t = i / segments;
+          let targetX = x1 + t * (x2 - x1) + (Math.random() - 0.5) * Number(settings.spacing) * 2;
+          let targetY = y1 + t * (y2 - y1) + (Math.random() - 0.5) * Number(settings.spacing) * 2;
+          ctx.beginPath();
+          ctx.moveTo(prevX, prevY);
+          ctx.lineTo(targetX, targetY);
+          ctx.stroke();
+          prevX = targetX;
+          prevY = targetY;
+        }
+      }
+      // NEW: Rings tool – draw concentric rings at the end of the stroke.
+      function drawRings(x, y) {
+        let ringCount = 3;
+        for (let i = 1; i <= ringCount; i++) {
+          ctx.beginPath();
+          ctx.arc(x, y, Number(settings.ringSize) * i / ringCount, 0, Math.PI * 2);
+          ctx.strokeStyle = getCurrentColor();
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+      // NEW: Scattering tool – wide scattered dots.
+      function drawScattering(x1, y1, x2, y2) {
+        let dist = Math.hypot(x2 - x1, y2 - y1);
+        let numDots = Math.floor(dist / Number(settings.spacing)) * 3;
+        for (let i = 0; i < numDots; i++) {
+          let t = Math.random();
+          let cx = x1 + t * (x2 - x1) + (Math.random() - 0.5) * Number(settings.scatter);
+          let cy = y1 + t * (y2 - y1) + (Math.random() - 0.5) * Number(settings.scatter);
+          let radius = Math.random() * 3 + 1;
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          ctx.fillStyle = getCurrentColor();
+          ctx.fill();
+        }
+      }
+      // Eraser – clears drawn content.
+      function eraseStroke(x1, y1, x2, y2) {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Number(settings.width) * 2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      // For rainbow mode: if enabled, update the currentRainbowHue after drawing.
+      function processRainbow(x1, y1, x2, y2) {
+        if (settings.rainbowEnabled) {
+          updateRainbow(x1, y1, x2, y2);
+        }
+      }
+      // Dispatch drawing based on current tool.
+      function drawTool(x1, y1, x2, y2) {
+        switch (currentTool) {
+          case 'fine': drawFine(x1, y1, x2, y2); break;
+          case 'splatter': drawSplatter(x1, y1, x2, y2); break;
+          case 'brush': drawBrush(x1, y1, x2, y2); break;
+          case 'highlighter': drawHighlighter(x1, y1, x2, y2); break;
+          case 'crayon': drawCrayon(x1, y1, x2, y2); break;
+          case 'dynamic': drawDynamic(x1, y1, x2, y2); break;
+          case 'oil': drawOil(x1, y1, x2, y2); break;
+          case 'chalk': drawChalk(x1, y1, x2, y2); break;
+          case 'spray': drawSpray(x1, y1, x2, y2); break;
+          case 'sparkler': drawSparkler(x1, y1, x2, y2); break;
+          case 'electric': drawElectric(x1, y1, x2, y2); break;
+          case 'rings': 
+            drawFine(x1, y1, x2, y2);
+            drawRings(x2, y2);
+            break;
+          case 'scattering': drawScattering(x1, y1, x2, y2); break;
+          case 'eraser': eraseStroke(x1, y1, x2, y2); break;
+          default: drawFine(x1, y1, x2, y2);
+        }
+        processRainbow(x1, y1, x2, y2);
+      }
+      // Stamp function for taps.
+      function stampTool(x, y) {
+        if (currentTool === 'eraser') {
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.beginPath();
+          ctx.arc(x, y, 15, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalCompositeOperation = 'source-over';
+          return;
+        }
+        ctx.fillStyle = getCurrentColor();
+        ctx.beginPath();
+        ctx.arc(x, y, Number(settings.width) / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      // ----- SOUND SYNTHESIS FUNCTION -----
+      function playSound(x, y) {
+        if (currentTool === 'eraser') return;
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        let hue = settings.rainbowEnabled ? currentRainbowHue : getHue(settings.color);
+        const frequency = 200 + (hue / 360) * 600;
+        oscillator.frequency.value = frequency;
+        let oscType = 'sine';
+        switch (currentTool) {
+          case 'fine': oscType = 'sine'; break;
+          case 'splatter': oscType = 'sawtooth'; break;
+          case 'brush': oscType = 'square'; break;
+          case 'highlighter': oscType = 'triangle'; break;
+          case 'crayon': oscType = 'sine'; oscillator.detune.value = 50; break;
+          case 'dynamic': {
+            const types = ['sine', 'square', 'triangle', 'sawtooth'];
+            let index = Math.floor((dynamicDistance % 100) / Number(settings.dynamicDash)) % types.length;
+            oscType = types[index];
+            break;
+          }
+          case 'oil': oscType = 'sine'; break;
+          case 'chalk': oscType = 'triangle'; break;
+          case 'spray': oscType = 'sawtooth'; break;
+          case 'sparkler': oscType = 'sawtooth'; break;
+          case 'electric': oscType = 'square'; break;
+          case 'rings': oscType = 'sine'; break;
+          case 'scattering': oscType = 'triangle'; break;
+          default: oscType = 'sine';
+        }
+        oscillator.type = oscType;
+        const decayTime = 0.3 + (Number(settings.width) / 100) * 0.7;
+        const volume = 0.5;
+        gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + decayTime);
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + decayTime);
+      }
+      
+      // ----- EVENT HANDLERS -----
+      function startDrawing(e) {
+        drawing = true;
+        const pos = getPos(e);
+        startX = pos.x;
+        startY = pos.y;
+        lastX = pos.x;
+        lastY = pos.y;
+        dynamicDistance = 0;
+        playSound(pos.x, pos.y);
+      }
+      function draw(e) {
+        if (!drawing) return;
+        const pos = getPos(e);
+        drawTool(lastX, lastY, pos.x, pos.y);
+        playSound(pos.x, pos.y);
+        dynamicDistance += Math.hypot(pos.x - lastX, pos.y - lastY);
+        lastX = pos.x;
+        lastY = pos.y;
+      }
+      function stopDrawing(e) {
+        if (!drawing) return;
+        drawing = false;
+        const pos = getPos(e);
+        let dx = pos.x - startX, dy = pos.y - startY;
+        if (Math.hypot(dx, dy) < 5) {
+          stampTool(pos.x, pos.y);
+          playSound(pos.x, pos.y);
+        }
+      }
+      canvas.addEventListener('mousedown', startDrawing);
+      canvas.addEventListener('touchstart', startDrawing);
+      canvas.addEventListener('mousemove', draw);
+      canvas.addEventListener('touchmove', draw);
+      canvas.addEventListener('mouseup', stopDrawing);
+      canvas.addEventListener('touchend', stopDrawing);
+      canvas.addEventListener('mouseout', stopDrawing);
+      
+      // ----- SAVE / DOWNLOAD FUNCTIONALITY -----
+      function downloadImage() {
+        // Check if the user wants a transparent save.
+        const transparent = document.getElementById('transparentSave').checked;
+        let exportCanvas;
+        if (!transparent) {
+          // Create a temporary canvas to add a solid background.
+          exportCanvas = document.createElement('canvas');
+          exportCanvas.width = canvas.width;
+          exportCanvas.height = canvas.height;
+          const exportCtx = exportCanvas.getContext('2d');
+          // Fill with a solid color (using the base color’s dark tone, for example)
+          exportCtx.fillStyle = "#111";
+          exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+          // Draw the current canvas on top
+          exportCtx.drawImage(canvas, 0, 0);
+        } else {
+          // Use the original canvas for a transparent save.
+          exportCanvas = canvas;
+        }
+        // Create a data URL and download
+        const dataURL = exportCanvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.href = dataURL;
+        link.download = "synesthesia-draw.png";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    });
+  </script>
+</body>
+</html>
